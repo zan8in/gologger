@@ -3,6 +3,7 @@ package gologger
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/zan8in/gologger/formatter"
@@ -11,19 +12,44 @@ import (
 )
 
 var (
-	labels = map[levels.Level]string{
-		levels.LevelFatal:   "FTL",
-		levels.LevelError:   "ERR",
-		levels.LevelInfo:    "INF",
-		levels.LevelWarning: "WRN",
-		levels.LevelDebug:   "DBG",
-		levels.LevelVerbose: "VER",
+	// labels2 = map[levels.Level]string{
+	// 	levels.LevelFatal:   "FTL",
+	// 	levels.LevelError:   "ERR",
+	// 	levels.LevelInfo:    "INF",
+	// 	levels.LevelWarning: "WRN",
+	// 	levels.LevelDebug:   "DBG",
+	// 	levels.LevelVerbose: "VER",
+	// }
+
+	// 默认 Unicode 符号
+	unicodeSymbols = map[levels.Level]string{
+		levels.LevelFatal:   "✖", // 红色大写X
+		levels.LevelError:   "✖", // 红色小写x
+		levels.LevelInfo:    "✓", // 蓝色小写i
+		levels.LevelWarning: "⚠", // 黄色叹号
+		levels.LevelDebug:   "#", // 灰色井号
+		levels.LevelVerbose: "~", // 浅灰色波浪号
 	}
+	// ASCII 兼容符号
+	asciiSymbols = map[levels.Level]string{
+		levels.LevelFatal:   "X", // 红色大写X
+		levels.LevelError:   "x", // 红色小写x
+		levels.LevelInfo:    "√", // 蓝色小写i
+		levels.LevelWarning: "!", // 黄色叹号
+		levels.LevelDebug:   "!", // 灰色井号
+		levels.LevelVerbose: "~", // 浅灰色波浪号
+	}
+
+	labels = map[levels.Level]string{}
+
+	unicode bool
+
 	// DefaultLogger is the default logging instance
 	DefaultLogger *Logger
 )
 
 func init() {
+	detectTerminalCapabilities()
 	DefaultLogger = &Logger{}
 	DefaultLogger.SetMaxLevel(levels.LevelInfo)
 	DefaultLogger.SetFormatter(formatter.NewCLI(false))
@@ -280,4 +306,31 @@ func (l *Logger) Verbose() *Event {
 	}
 	event.metadata["label"] = labels[level]
 	return event
+}
+
+// 检测终端能力
+func detectTerminalCapabilities() {
+	// 检查 Unicode 支持
+	switch runtime.GOOS {
+	case "windows":
+		unicode = detectWindowsUnicodeSupport()
+	default:
+		unicode = detectUnixUnicodeSupport()
+	}
+	if unicode {
+		labels = unicodeSymbols
+	} else {
+		labels = asciiSymbols
+	}
+}
+
+func detectWindowsUnicodeSupport() bool {
+	// 检测 Windows Terminal 或配置了 UTF-8 代码页
+	return os.Getenv("WT_SESSION") != "" ||
+		strings.Contains(os.Getenv("PROMPT"), "$E") || // ANSI 转义支持
+		os.Getenv("PYCHARM_HOSTED") == "1" // IDE 终端
+}
+
+func detectUnixUnicodeSupport() bool {
+	return strings.Contains(strings.ToLower(os.Getenv("LANG")), "utf-8")
 }
